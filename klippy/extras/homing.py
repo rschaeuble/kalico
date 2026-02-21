@@ -422,6 +422,12 @@ class PrinterHoming:
         gcode = self.printer.lookup_object("gcode")
         gcode.register_command("G28", self.cmd_G28)
 
+    def register_axis_steppers(self, toolhead, mcu_endstop, axis):
+        kin = toolhead.get_kinematics()
+        for stepper in kin.get_steppers():
+            if stepper.is_active_axis(axis):
+                mcu_endstop.add_stepper(stepper)
+
     def manual_home(
         self, toolhead, endstops, pos, speed, triggered, check_triggered
     ):

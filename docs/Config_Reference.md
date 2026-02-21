@@ -1766,6 +1766,10 @@ Safe Z homing. One may use this mechanism to home the Z axis at a
 specific X, Y coordinate. This is useful if the toolhead, for example
 has to move to the center of the bed before Z can be homed.
 
+If `[safe_z_lift]` is configured, Z hop moves will be
+converted to "safe lifts", preventing crashes if the axis is already at
+or near Z-max.
+
 ```
 [safe_z_home]
 home_xy_position:
@@ -1789,6 +1793,18 @@ home_xy_position:
 #   positions after Z axis homing. The default is False.
 #home_y_before_x: False
 #  # If True, the Y axis will home first. The default is False.
+```
+
+### [safe_z_lift]
+
+Safe Z lift. One may use this mechanism to prevent the Z axis from crashing into
+its upper mechanical limit during homing and probing lift moves. It requires a
+safety endstop (typically Z-max) to be defined.
+
+```
+[safe_z_lift]
+max_endstop_pin:
+#   The pin connected to the Z-max endstop. This parameter must be provided.
 ```
 
 ### [homing_override]
@@ -2625,6 +2641,10 @@ in a dock when not in use. One should define this section instead
 of a probe section if the probe uses magnets to attach and a dock
 for storage. See [Dockable Probe Guide](Dockable_Probe.md)
 for more detailed information regarding configuration and setup.
+
+If `[safe_z_lift]` is configured, Z hop moves will be
+converted to "safe lifts", preventing crashes if the axis is already at
+or near Z-max.
 
 ```
 [dockable_probe]
