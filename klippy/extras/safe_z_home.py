@@ -34,23 +34,11 @@ class SafeZHoming:
 
     def cmd_G28(self, gcmd):
         toolhead = self.printer.lookup_object("toolhead")
+        safe_lift = self.printer.lookup_object("safe_z_lift", None)
 
         # Perform Z Hop if necessary
         if self.z_hop != 0.0:
-            # Check if Z axis is homed and its last known position
-            curtime = self.printer.get_reactor().monotonic()
-            kin_status = toolhead.get_kinematics().get_status(curtime)
-            pos = toolhead.get_position()
-
-            if "z" not in kin_status["homed_axes"]:
-                # Always perform the z_hop if the Z axis is not homed
-                pos[2] = 0
-                toolhead.set_position(pos, homing_axes=[2])
-                toolhead.manual_move([None, None, self.z_hop], self.z_hop_speed)
-                toolhead.get_kinematics().clear_homing_state((2,))
-            elif pos[2] < self.z_hop:
-                # If the Z axis is homed, and below z_hop, lift it to z_hop
-                toolhead.manual_move([None, None, self.z_hop], self.z_hop_speed)
+            self._safe_lift(toolhead, self.z_hop, safe_lift, force_unhomed=True)
 
         # Determine which axes we need to home
         need_x, need_y, need_z = [
@@ -111,6 +99,34 @@ class SafeZHoming:
             # Move XY back to previous positions
             if self.move_to_previous:
                 toolhead.manual_move(prevpos[:2], self.speed)
+
+    def _safe_lift(self, toolhead, lift_dist, safe_lift, force_unhomed=False):
+        if safe_lift is not None:
+            safe_lift.move_to_safe_z(
+                toolhead,
+                lift_dist,
+                self.z_hop_speed,
+                force_unhomed=force_unhomed,
+            )
+        else:
+            if force_unhomed:
+                # Check if Z axis is homed and its last known position
+                curtime = self.printer.get_reactor().monotonic()
+                kin_status = toolhead.get_kinematics().get_status(curtime)
+                pos = toolhead.get_position()
+                if "z" not in kin_status["homed_axes"]:
+                    # Always perform the z_hop if the Z axis is not homed
+                    pos[2] = 0
+                    toolhead.set_position(pos, homing_axes=[2])
+                    toolhead.manual_move(
+                        [None, None, lift_dist], self.z_hop_speed
+                    )
+                    toolhead.get_kinematics().clear_homing_state((2,))
+                    return
+            pos = toolhead.get_position()
+            target_z = pos[2] + lift_dist
+            if pos[2] < target_z:
+                toolhead.manual_move([None, None, target_z], self.z_hop_speed)
 
 
 def load_config(config):

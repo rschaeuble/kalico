@@ -44,6 +44,7 @@
 - [`[z_tilt/quad_gantry_level] adaptive_horizontal_move_z`](./Config_Reference.md#z_tilt) adaptively decrease horizontal_move_z based on resulting error - z_tilt and QGL faster and safer!
 - [`[safe_z_home] home_y_before_x`](./Config_Reference.md#safe_z_home) let you home Y before X.
 - [`[z_tilt/quad_gantry_level/etc] use_probe_xy_offsets`](./Config_Reference.md#z_tilt) let you decide if the `[probe] XY offsets should be applied to probe positions.
+- [`[safe_z_lift]`](./Safe_Z_Lift.md) allows you to lift Z without running into the positive limit.
 
 ## Heaters, Fans, and PID changes
 
