@@ -2091,7 +2091,7 @@
 <p>The <code>[safe_z_lift]</code> module implements a safety mechanism for Z-axis lifting operations, particularly useful during
 homing and probing sequences.</p>
 <p>When the printer is at or near Z-max, operations that require a Z hop (like <code>safe_z_home</code> or
-<code>dockable_probe</code> deployment) can crash into the axis' mechanical limits.The <code>safe_z_lift</code> module allows the printer to
+<code>dockable_probe</code> deployment) can crash into the axis' mechanical limits. The <code>safe_z_lift</code> module allows the printer to
 perform these lifting moves while monitoring a specific endstop (Z-max endstop). If the endstop is triggered during the
 lift, the movement stops immediately, but the operation proceeds without error.</p>
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
