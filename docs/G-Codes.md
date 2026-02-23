@@ -1606,17 +1606,17 @@ The following additional commands are also available.
   prepended with `<prefix>`. (The `PREFIX` parameter will take
   priority over the `TYPE` parameter)
 
-### [safe_z_lift]
+### [safe_move]
 
-The following command is available when the `[safe_z_lift]` config section is
-enabled (also see the [Safe Z Lift guide](Safe_Z_Lift.md)):
+The following command is available:
 
-#### SAFE_Z_LIFT
+#### SAFE_MOVE
 
-`SAFE_Z_LIFT DIST=<distance> SPEED=<speed>`: Performs a Z-axis lift of the
-specified distance at the specified speed (in mm/sec). May be used even if the printer is not homed. If the safety
-endstop is triggered
-during the move, the movement stops immediately.
+`SAFE_MOVE AXIS=<X|Y|Z> DIST=<distance> SPEED=<speed>`: Performs a protected
+single-axis move in the given direction. The move stops early if the directional
+endstop triggers or the end of the axis is reached.
+
+Trying to move into a direction that does not have an endstop will raise an error.
 
 ### [save_variables]
 
