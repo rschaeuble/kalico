@@ -9017,8 +9017,8 @@ take effect immediately.</p>
 <p>The following command is available:</p>
 <h4 id="safe_move_1">SAFE_MOVE<a class="headerlink" href="#safe_move_1" title="Permanent link">&para;</a></h4>
 <p><code>SAFE_MOVE AXIS=&lt;X|Y|Z&gt; DIST=&lt;distance&gt; SPEED=&lt;speed&gt;</code>: Performs a protected
-single-axis move in the given direction. The move stops if the directional
-endstop triggers and errors if no endstop protects the requested direction.</p>
+single-axis move in the given direction. The move stops early if the directional
+endstop triggers or the end of the axis is reached.</p>
 <p>Trying to move into a direction that does not have an endstop will raise an error.</p>
 <h3 id="save_variables">[save_variables]<a class="headerlink" href="#save_variables" title="Permanent link">&para;</a></h3>
 <p>The following command is enabled if a
