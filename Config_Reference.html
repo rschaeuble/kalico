@@ -855,9 +855,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#safe_z_lift" class="md-nav__link">
+  <a href="#safe_move" class="md-nav__link">
     <span class="md-ellipsis">
-      [safe_z_lift]
+      [safe_move]
     </span>
   </a>
   
@@ -2460,11 +2460,11 @@
   
   
     <li class="md-nav__item">
-      <a href="Safe_Z_Lift.html" class="md-nav__link">
+      <a href="Safe_Z_Lift.md" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    Safe Z Lift
+    None
   </span>
   
 
@@ -4254,9 +4254,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#safe_z_lift" class="md-nav__link">
+  <a href="#safe_move" class="md-nav__link">
     <span class="md-ellipsis">
-      [safe_z_lift]
+      [safe_move]
     </span>
   </a>
   
@@ -7292,9 +7292,9 @@ hotend, heatbreak and frame.</p>
 <p>Safe Z homing. One may use this mechanism to home the Z axis at a
 specific X, Y coordinate. This is useful if the toolhead, for example
 has to move to the center of the bed before Z can be homed.</p>
-<p>If <code>[safe_z_lift]</code> is configured, Z hop moves will be
-converted to "safe lifts", preventing crashes if the axis is already at
-or near Z-max.</p>
+<p>If <code>safe_move</code> is configured, Z hop moves will be converted to safe
+directional moves, preventing crashes if the axis is already at or near
+the configured endstop.</p>
 <div class="highlight"><pre><span></span><code>[safe_z_home]
 home_xy_position:
 #   A X, Y coordinate (e.g. 100, 100) where the Z homing should be
@@ -7319,13 +7319,11 @@ home_xy_position:
 #  # If True, the Y axis will home first. The default is False.
 </code></pre></div>
 
-<h3 id="safe_z_lift">[safe_z_lift]<a class="headerlink" href="#safe_z_lift" title="Permanent link">&para;</a></h3>
-<p>Safe Z lift. One may use this mechanism to prevent the Z axis from crashing into
-its upper mechanical limit during homing and probing lift moves. It requires a
-safety endstop (typically Z-max) to be defined.</p>
-<div class="highlight"><pre><span></span><code>[safe_z_lift]
-max_endstop_pin:
-#   The pin connected to the Z-max endstop. This parameter must be provided.
+<h3 id="safe_move">[safe_move]<a class="headerlink" href="#safe_move" title="Permanent link">&para;</a></h3>
+<p>Safe move. One may use this mechanism to prevent axis crashes during homing and
+probing moves by leveraging directional endstops configured on the axis rails.</p>
+<div class="highlight"><pre><span></span><code>[safe_move]
+# (no required parameters)
 </code></pre></div>
 
 <h3 id="homing_override">[homing_override]<a class="headerlink" href="#homing_override" title="Permanent link">&para;</a></h3>
@@ -8069,9 +8067,9 @@ in a dock when not in use. One should define this section instead
 of a probe section if the probe uses magnets to attach and a dock
 for storage. See <a href="Dockable_Probe.html">Dockable Probe Guide</a>
 for more detailed information regarding configuration and setup.</p>
-<p>If <code>[safe_z_lift]</code> is configured, Z hop moves will be
-converted to "safe lifts", preventing crashes if the axis is already at
-or near Z-max.</p>
+<p>If <code>safe_move</code> is configured, Z hop moves will be
+converted to safe directional moves, preventing crashes if the axis is already at
+or near a configured endstop.</p>
 <div class="highlight"><pre><span></span><code>[dockable_probe]
 dock_position: 0,0,0
 #   The physical position of the probe dock relative to the origin of

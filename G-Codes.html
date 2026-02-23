@@ -11,7 +11,7 @@
         <link rel="canonical" href="https://docs.kalico.gg/G-Codes.html">
       
       
-        <link rel="prev" href="Safe_Z_Lift.html">
+        <link rel="prev" href="Dockable_Probe.html">
       
       
         <link rel="next" href="Command_Templates.html">
@@ -636,11 +636,11 @@
   
   
     <li class="md-nav__item">
-      <a href="Safe_Z_Lift.html" class="md-nav__link">
+      <a href="Safe_Z_Lift.md" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    Safe Z Lift
+    None
   </span>
   
 
@@ -2716,19 +2716,19 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#safe_z_lift" class="md-nav__link">
+  <a href="#safe_move" class="md-nav__link">
     <span class="md-ellipsis">
-      [safe_z_lift]
+      [safe_move]
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="[safe_z_lift]">
+    <nav class="md-nav" aria-label="[safe_move]">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#safe_z_lift_1" class="md-nav__link">
+  <a href="#safe_move_1" class="md-nav__link">
     <span class="md-ellipsis">
-      SAFE_Z_LIFT
+      SAFE_MOVE
     </span>
   </a>
   
@@ -6822,19 +6822,19 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#safe_z_lift" class="md-nav__link">
+  <a href="#safe_move" class="md-nav__link">
     <span class="md-ellipsis">
-      [safe_z_lift]
+      [safe_move]
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="[safe_z_lift]">
+    <nav class="md-nav" aria-label="[safe_move]">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#safe_z_lift_1" class="md-nav__link">
+  <a href="#safe_move_1" class="md-nav__link">
     <span class="md-ellipsis">
-      SAFE_Z_LIFT
+      SAFE_MOVE
     </span>
   </a>
   
@@ -9013,14 +9013,13 @@ take effect immediately.</p>
   prepended with <code>&lt;prefix&gt;</code>. (The <code>PREFIX</code> parameter will take
   priority over the <code>TYPE</code> parameter)</li>
 </ul>
-<h3 id="safe_z_lift">[safe_z_lift]<a class="headerlink" href="#safe_z_lift" title="Permanent link">&para;</a></h3>
-<p>The following command is available when the <code>[safe_z_lift]</code> config section is
-enabled (also see the <a href="Safe_Z_Lift.html">Safe Z Lift guide</a>):</p>
-<h4 id="safe_z_lift_1">SAFE_Z_LIFT<a class="headerlink" href="#safe_z_lift_1" title="Permanent link">&para;</a></h4>
-<p><code>SAFE_Z_LIFT DIST=&lt;distance&gt; SPEED=&lt;speed&gt;</code>: Performs a Z-axis lift of the
-specified distance at the specified speed (in mm/sec). May be used even if the printer is not homed. If the safety
-endstop is triggered
-during the move, the movement stops immediately.</p>
+<h3 id="safe_move">[safe_move]<a class="headerlink" href="#safe_move" title="Permanent link">&para;</a></h3>
+<p>The following command is available:</p>
+<h4 id="safe_move_1">SAFE_MOVE<a class="headerlink" href="#safe_move_1" title="Permanent link">&para;</a></h4>
+<p><code>SAFE_MOVE AXIS=&lt;X|Y|Z&gt; DIST=&lt;distance&gt; SPEED=&lt;speed&gt;</code>: Performs a protected
+single-axis move in the given direction. The move stops if the directional
+endstop triggers and errors if no endstop protects the requested direction.</p>
+<p>Trying to move into a direction that does not have an endstop will raise an error.</p>
 <h3 id="save_variables">[save_variables]<a class="headerlink" href="#save_variables" title="Permanent link">&para;</a></h3>
 <p>The following command is enabled if a
 <a href="Config_Reference.html#save_variables">save_variables config section</a>
