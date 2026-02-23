@@ -294,6 +294,10 @@ endstop_pin:
 #   different mcu than the stepper motor then it enables "multi-mcu
 #   homing". This parameter must be provided for the X, Y, and Z
 #   steppers on cartesian style printers.
+#opposite_endstop_pin:
+#   Optional endstop switch on the opposite travel limit. This pin is
+#   used by the safe_move module to protect moves in the direction away
+#   from the primary endstop.
 #position_min: 0
 #   Minimum valid distance (in mm) the user may command the stepper to
 #   move to.  The default is 0mm.
@@ -1766,9 +1770,9 @@ Safe Z homing. One may use this mechanism to home the Z axis at a
 specific X, Y coordinate. This is useful if the toolhead, for example
 has to move to the center of the bed before Z can be homed.
 
-If `[safe_z_lift]` is configured, Z hop moves will be
-converted to "safe lifts", preventing crashes if the axis is already at
-or near Z-max.
+If `safe_move` is configured, Z hop moves will be converted to safe
+directional moves, preventing crashes if the axis is already at or near
+the configured endstop.
 
 ```
 [safe_z_home]
@@ -1795,16 +1799,14 @@ home_xy_position:
 #  # If True, the Y axis will home first. The default is False.
 ```
 
-### [safe_z_lift]
+### [safe_move]
 
-Safe Z lift. One may use this mechanism to prevent the Z axis from crashing into
-its upper mechanical limit during homing and probing lift moves. It requires a
-safety endstop (typically Z-max) to be defined.
+Safe move. One may use this mechanism to prevent axis crashes during homing and
+probing moves by leveraging directional endstops configured on the axis rails.
 
 ```
-[safe_z_lift]
-max_endstop_pin:
-#   The pin connected to the Z-max endstop. This parameter must be provided.
+[safe_move]
+# (no required parameters)
 ```
 
 ### [homing_override]
@@ -2642,9 +2644,9 @@ of a probe section if the probe uses magnets to attach and a dock
 for storage. See [Dockable Probe Guide](Dockable_Probe.md)
 for more detailed information regarding configuration and setup.
 
-If `[safe_z_lift]` is configured, Z hop moves will be
-converted to "safe lifts", preventing crashes if the axis is already at
-or near Z-max.
+If `safe_move` is configured, Z hop moves will be
+converted to safe directional moves, preventing crashes if the axis is already at
+or near a configured endstop.
 
 ```
 [dockable_probe]
