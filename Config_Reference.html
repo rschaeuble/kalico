@@ -5940,6 +5940,10 @@ endstop_pin:
 #   different mcu than the stepper motor then it enables &quot;multi-mcu
 #   homing&quot;. This parameter must be provided for the X, Y, and Z
 #   steppers on cartesian style printers.
+#opposite_endstop_pin:
+#   Optional endstop switch on the opposite travel limit. This pin is
+#   used by the safe_move module to protect moves in the direction away
+#   from the primary endstop.
 #position_min: 0
 #   Minimum valid distance (in mm) the user may command the stepper to
 #   move to.  The default is 0mm.
