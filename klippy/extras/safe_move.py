@@ -64,13 +64,10 @@ class SafeMove:
 
         try:
             if endstops:
-                self.homing.manual_home(
-                    toolhead,
+                self.homing.endstop_move(
                     endstops,
                     target_pos,
                     speed,
-                    triggered=True,
-                    check_triggered=False,
                 )
             elif allow_unsafe:
                 move_cmd = [None, None, None, None]
