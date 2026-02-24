@@ -271,7 +271,6 @@ class DockableProbe:
         self.finish_home_complete = self.wait_trigger_complete = None
 
         # State
-        self.last_z = -9999
         self.multi = MULTI_OFF
         self._last_homed = None
 
@@ -383,7 +382,7 @@ class DockableProbe:
 
     def _handle_connect(self):
         self.toolhead = self.printer.lookup_object("toolhead")
-        self.safe_move = self.printer.lookup_object("safe_move", None)
+        self.safe_move = self.printer.lookup_object("safe_move")
         rails = self.toolhead.get_kinematics().rails
         endstops = [es for rail in rails for es, name in rail.get_endstops()]
         positions = [
@@ -816,27 +815,6 @@ class DockableProbe:
         )
         return [safe_point1, safe_point2]
 
-    def _z_lift(self, lift_dist, speed, force_unhomed=False):
-        if self.safe_move is not None:
-            self.safe_move.move(
-                self.toolhead,
-                "z",
-                lift_dist,
-                speed,
-                allow_unsafe=True,
-            )
-        elif force_unhomed:
-            tpos = self.toolhead.get_position()
-            self.toolhead.set_position(
-                [tpos[0], tpos[1], 0.0, tpos[3]], homing_axes=[2]
-            )
-            self.toolhead.manual_move([None, None, lift_dist], speed)
-            kin = self.toolhead.get_kinematics()
-            kin.clear_homing_state([2])
-        else:
-            tpos = self.toolhead.get_position()
-            self.toolhead.manual_move([None, None, tpos[2] + lift_dist], speed)
-
     # Align z axis to prevent crashes
     def _align_z(self):
         curtime = self.printer.get_reactor().monotonic()
@@ -850,7 +828,9 @@ class DockableProbe:
             if "z" in self._last_homed:
                 tpos = self.toolhead.get_position()
                 if tpos[2] < self.z_hop:
-                    self._z_lift(self.z_hop - tpos[2], self.lift_speed)
+                    self.toolhead.manual_move(
+                        [None, None, self.z_hop], self.lift_speed
+                    )
             else:
                 self._force_z_hop()
 
@@ -859,22 +839,20 @@ class DockableProbe:
             raise self.printer.command_error(
                 "Cannot attach/detach probe, must home Z axis first"
             )
-        tpos = self.toolhead.get_position()
-        if tpos[2] < self.approach_position[2]:
-            self._z_lift(self.approach_position[2] - tpos[2], self.lift_speed)
-        else:
-            self.toolhead.manual_move(
-                [None, None, self.approach_position[2]], self.lift_speed
-            )
+
+        self.toolhead.manual_move(
+            [None, None, self.approach_position[2]], self.lift_speed
+        )
 
     # Hop z and return to un-homed state
     def _force_z_hop(self):
-        this_z = self.toolhead.get_position()[2]
-        if self.last_z == this_z:
-            return
-
-        self._z_lift(self.z_hop, self.lift_speed, force_unhomed=True)
-        self.last_z = self.toolhead.get_position()[2]
+        self.safe_move.move(
+            self.toolhead,
+            "z",
+            self.z_hop,
+            self.lift_speed,
+            allow_unsafe=True,
+        )
 
     #######################################################################
     # Probe Wrappers

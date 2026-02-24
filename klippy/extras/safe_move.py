@@ -42,7 +42,7 @@ class SafeMove:
         curtime = reactor.monotonic()
         homed_axes = kin.get_status(curtime)[
             "homed_axes"
-        ]  # TODO: is curtime the correct time to use?
+        ]
 
         was_unhomed = False
         position = toolhead.get_position()
