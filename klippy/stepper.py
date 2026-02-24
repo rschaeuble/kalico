@@ -615,7 +615,9 @@ class PrinterRail:
                 "endstop_max_pin in section '%s'" % (config.get_name(),)
             )
 
-        if min_pin is not None:
+        no_pins = min_pin is None and max_pin is None and legacy_pin is None
+
+        if min_pin is not None or no_pins:
             self._attach_endstop(
                 config,
                 stepper,
@@ -623,9 +625,9 @@ class PrinterRail:
                 self.endstops_min,
                 self.endstop_min_map,
                 lambda s: f"{s.get_name(short=True)}_min",
-                allow_missing=True,
+                True,
             )
-        if max_pin is not None:
+        if max_pin is not None or no_pins:
             self._attach_endstop(
                 config,
                 stepper,
@@ -633,9 +635,9 @@ class PrinterRail:
                 self.endstops_max,
                 self.endstop_max_map,
                 lambda s: f"{s.get_name(short=True)}_max",
-                allow_missing=True,
+                True,
             )
-        if legacy_pin is not None:
+        if legacy_pin is not None or no_pins:
             self._attach_endstop(
                 config,
                 stepper,
@@ -643,7 +645,7 @@ class PrinterRail:
                 self.endstops_legacy,
                 self.endstop_legacy_map,
                 lambda s: s.get_name(short=True),
-                allow_missing=True,
+                True,
             )
 
     def setup_itersolve(self, alloc_func, *params):
