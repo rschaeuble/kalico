@@ -121,5 +121,6 @@ class SafeZHoming:
         elif pos[2] < self.z_hop:
             toolhead.manual_move([None, None, self.z_hop], self.z_hop_speed)
 
+
 def load_config(config):
     return SafeZHoming(config)

@@ -36,20 +36,20 @@ class SafeMove:
             return
         positive = dist > 0.0
         endstops = rail.get_endstops_for_direction(positive)
-        rail_min, rail_max = rail.get_range()
 
         reactor = self.printer.get_reactor()
         curtime = reactor.monotonic()
-        homed_axes = kin.get_status(curtime)[
-            "homed_axes"
-        ]
+        kin_status = kin.get_status(curtime)
+
+        axis_min = kin_status["axis_minimum"][axis_idx]
+        axis_max = kin_status["axis_maximum"][axis_idx]
 
         was_unhomed = False
         position = toolhead.get_position()
-        if axis_lower not in homed_axes:
+        if axis_lower not in kin_status["homed_axes"]:
             was_unhomed = True
             # Assume a safe coordinate so the requested move stays in range.
-            position[axis_idx] = rail_max if dist < 0.0 else rail_min
+            position[axis_idx] = axis_max if dist < 0.0 else axis_min
             toolhead.set_position(position, homing_axes=[axis_idx])
             position = toolhead.get_position()
 
@@ -57,7 +57,7 @@ class SafeMove:
         target_pos[axis_idx] = position[axis_idx] + dist
         # Clamp moves for homed axes to avoid out-of-range errors.
         target_pos[axis_idx] = max(
-            rail_min, min(rail_max, target_pos[axis_idx])
+            axis_min, min(axis_max, target_pos[axis_idx])
         )
         if target_pos[axis_idx] == position[axis_idx]:
             return
