@@ -289,15 +289,22 @@ microsteps:
 #   The default is 0.000000100 (100ns) for TMC steppers that are
 #   configured in UART or SPI mode, and the default is 0.000002 (which
 #   is 2us) for all other steppers.
-endstop_pin:
-#   Endstop switch detection pin. If this endstop pin is on a
-#   different mcu than the stepper motor then it enables "multi-mcu
-#   homing". This parameter must be provided for the X, Y, and Z
-#   steppers on cartesian style printers.
-#opposite_endstop_pin:
-#   Optional endstop switch on the opposite travel limit. This pin is
-#   used by the safe_move module to protect moves in the direction away
-#   from the primary endstop.
+endstop_min_pin:
+#   Endstop switch detection pin at the minimum travel limit. This
+#   parameter must be provided for the X, Y, and Z steppers on
+#   cartesian style printers that home towards the minimum limit. If
+#   the endstop pin is on a different mcu than the stepper motor then
+#   it enables "multi-mcu homing".
+endstop_max_pin:
+#   Endstop switch detection pin at the maximum travel limit. This
+#   parameter must be provided for the X, Y, and Z steppers on
+#   cartesian style printers that home towards the maximum limit. If
+#   the endstop pin is on a different mcu than the stepper motor then
+#   it enables "multi-mcu homing".
+#endstop_pin:
+#   Alias for endstop_min_pin or endstop_max_pin, depending on the
+#   homing direction. This parameter is deprecated; use
+#   endstop_min_pin or endstop_max_pin instead.
 #position_min: 0
 #   Minimum valid distance (in mm) the user may command the stepper to
 #   move to.  The default is 0mm.
