@@ -7282,9 +7282,6 @@ hotend, heatbreak and frame.</p>
 <p>Safe Z homing. One may use this mechanism to home the Z axis at a
 specific X, Y coordinate. This is useful if the toolhead, for example
 has to move to the center of the bed before Z can be homed.</p>
-<p>If <code>safe_move</code> is configured, Z hop moves will be converted to safe
-directional moves, preventing crashes if the axis is already at or near
-the configured endstop.</p>
 <div class="highlight"><pre><span></span><code>[safe_z_home]
 home_xy_position:
 #   A X, Y coordinate (e.g. 100, 100) where the Z homing should be
@@ -8057,9 +8054,6 @@ in a dock when not in use. One should define this section instead
 of a probe section if the probe uses magnets to attach and a dock
 for storage. See <a href="Dockable_Probe.html">Dockable Probe Guide</a>
 for more detailed information regarding configuration and setup.</p>
-<p>If <code>safe_move</code> is configured, Z hop moves will be
-converted to safe directional moves, preventing crashes if the axis is already at
-or near a configured endstop.</p>
 <div class="highlight"><pre><span></span><code>[dockable_probe]
 dock_position: 0,0,0
 #   The physical position of the probe dock relative to the origin of
