@@ -402,6 +402,42 @@ def parse_step_distance(config, units_in_radians=None, note_valid=False):
     return rotation_dist, full_steps * microsteps * gearing
 
 
+endstop_pin_config = collections.namedtuple(
+    "endstop_pin_config", ["style", "min_pin", "max_pin", "legacy_pin"]
+)
+
+primary_stepper_endstop_setup = collections.namedtuple(
+    "primary_stepper_endstop_setup",
+    [
+        "pins",
+        "endstops_min",
+        "endstop_min_map",
+        "endstops_max",
+        "endstop_max_map",
+        "endstops_legacy",
+        "endstop_legacy_map",
+    ],
+)
+
+
+def _read_endstop_pins(config) -> endstop_pin_config:
+    min_pin = config.get("endstop_min_pin", None)
+    max_pin = config.get("endstop_max_pin", None)
+    legacy_pin = config.get("endstop_pin", None)
+    if legacy_pin is not None and (min_pin is not None or max_pin is not None):
+        raise config.error(
+            "endstop_pin cannot be used with endstop_min_pin or endstop_max_pin "
+            "in section '%s'" % (config.get_name(),)
+        )
+    if legacy_pin is not None:
+        style = "legacy"
+    elif min_pin is not None or max_pin is not None:
+        style = "minmax"
+    else:
+        style = None
+    return endstop_pin_config(style, min_pin, max_pin, legacy_pin)
+
+
 ######################################################################
 # Stepper controlled rails
 ######################################################################
@@ -424,27 +460,32 @@ class PrinterRail:
         self.endstop_min_map = {}
         self.endstops_max = []
         self.endstop_max_map = {}
-        self.endstops_legacy = []
-        self.endstop_legacy_map = {}
+        self._endstop_style = None
         self.printer = config.get_printer()
-        self.add_extra_stepper(config)
+        primary_setup = self._add_primary_stepper(config)
         mcu_stepper = self.steppers[0]
         self._tmc_current_helpers = None
         self.get_name = mcu_stepper.get_name
         self.get_commanded_position = mcu_stepper.get_commanded_position
         self.calc_position_from_coord = mcu_stepper.calc_position_from_coord
         # Primary endstop position
-        primary_endstops = (  # todoai 'primary' suggests the existence of 'secondary'; is there a better name?
-            self.endstops_legacy or self.endstops_min or self.endstops_max
+        primary_endstops = (
+            primary_setup.endstops_legacy
+            + primary_setup.endstops_min
+            + primary_setup.endstops_max
         )
         if not primary_endstops:
             raise config.error(
                 "No endstop pin configured for section '%s'"
                 % (config.get_name(),)
             )
-        mcu_endstop = primary_endstops[0][0]
-        if hasattr(mcu_endstop, "get_position_endstop"):
-            self.position_endstop = mcu_endstop.get_position_endstop()
+        position_endstop = None
+        for mcu_endstop, _ in primary_endstops:
+            if hasattr(mcu_endstop, "get_position_endstop"):
+                position_endstop = mcu_endstop.get_position_endstop()
+                break
+        if position_endstop is not None:
+            self.position_endstop = position_endstop
         elif default_position_endstop is None:
             self.position_endstop = config.getfloat("position_endstop")
         else:
@@ -498,17 +539,33 @@ class PrinterRail:
                 % (config.get_name(),)
             )
 
-        endstop_pin = config.get("endstop_pin", None)
-        if endstop_pin is None:
+        # Finalize endstops now that homing direction is known.
+        if self._endstop_style == "minmax":
+            self.endstops_min = primary_setup.endstops_min
+            self.endstop_min_map = primary_setup.endstop_min_map
+            self.endstops_max = primary_setup.endstops_max
+            self.endstop_max_map = primary_setup.endstop_max_map
+        elif primary_setup.endstops_legacy:
             if self.homing_positive_dir:
-                endstop_pin = config.get("endstop_max_pin", None)
-                # fallback to min if max not found? No, strictly homing direction
+                self.endstops_max = primary_setup.endstops_legacy
+                self.endstop_max_map = primary_setup.endstop_legacy_map
             else:
-                endstop_pin = config.get("endstop_min_pin", None)
+                self.endstops_min = primary_setup.endstops_legacy
+                self.endstop_min_map = primary_setup.endstop_legacy_map
 
-        # check for ":virtual_endstop" to make sure we don't detect ":z_virtual_endstop"
+        if self._endstop_style == "legacy":
+            endstop_pin_string = primary_setup.pins.legacy_pin
+        elif self._endstop_style == "minmax":
+            if self.homing_positive_dir:
+                endstop_pin_string = primary_setup.pins.max_pin
+            else:
+                endstop_pin_string = primary_setup.pins.min_pin
+        else:
+            endstop_pin_string = None
+
         endstop_is_virtual = (
-            endstop_pin is not None and ":virtual_endstop" in endstop_pin
+            endstop_pin_string is not None
+            and ":virtual_endstop" in endstop_pin_string
         )
 
         # Homing mechanics
@@ -538,17 +595,6 @@ class PrinterRail:
         )
 
         self.homing_accel = config.getfloat("homing_accel", None, above=0.0)
-
-        # Resolve legacy endstop pins now that homing direction is known
-        if self.endstops_legacy:
-            if self.homing_positive_dir:
-                self.endstops_max.extend(self.endstops_legacy)
-                self.endstop_max_map.update(self.endstop_legacy_map)
-            else:
-                self.endstops_min.extend(self.endstops_legacy)
-                self.endstop_min_map.update(self.endstop_legacy_map)
-            self.endstops_legacy = []
-            self.endstop_legacy_map = {}
 
     def get_tmc_current_helpers(self):
         if self._tmc_current_helpers is None:
@@ -591,62 +637,155 @@ class PrinterRail:
         return list(self.steppers)
 
     def get_endstops(self):
-        return self.endstops_min + self.endstops_max
+        return self.get_endstops_for_direction(self.homing_positive_dir)
 
     def get_endstops_for_direction(self, is_positive_dir):
         if is_positive_dir:
             return list(self.endstops_max)
         return list(self.endstops_min)
 
-    def add_extra_stepper(self, config):
+    def _enforce_endstop_style(self, config, section_style):
+        if section_style is None:
+            return
+        if self._endstop_style is None:
+            self._endstop_style = section_style
+            return
+        if section_style == self._endstop_style:
+            return
+        raise config.error(
+            f"Mixed endstop pin styles on rail '{self.get_name()}' in section '{config.get_name()}': use either "
+            "endstop_pin OR endstop_{min,max}_pin consistently"
+        )
+
+    def _share_endstops(self, stepper, endstop_list):
+        if not endstop_list:
+            return
+        endstop_list[0][0].add_stepper(stepper)
+
+    def _add_primary_stepper(self, config):
         stepper = PrinterStepper(config, self.stepper_units_in_radians)
         self.steppers.append(stepper)
-
-        # Check endstop configuration
-        min_pin = config.get("endstop_min_pin", None)
-        max_pin = config.get("endstop_max_pin", None)
-        legacy_pin = config.get("endstop_pin", None)
-
-        if (
-            min_pin is not None or max_pin is not None
-        ) and legacy_pin is not None:
+        pins = _read_endstop_pins(config)
+        self._enforce_endstop_style(config, pins.style)
+        if pins.style is None:
             raise config.error(
-                "endstop_pin cannot be used with endstop_min_pin or "
-                "endstop_max_pin in section '%s'" % (config.get_name(),)
+                "No endstop pin configured for section '%s'"
+                % (config.get_name(),)
             )
-
-        no_pins = min_pin is None and max_pin is None and legacy_pin is None
-
-        if min_pin is not None or no_pins:
-            self._attach_endstop(
-                config,
-                stepper,
-                "endstop_min_pin",
-                self.endstops_min,
-                self.endstop_min_map,
-                lambda s: f"{s.get_name(short=True)}_min",
-                True,
-            )
-        if max_pin is not None or no_pins:
-            self._attach_endstop(
-                config,
-                stepper,
-                "endstop_max_pin",
-                self.endstops_max,
-                self.endstop_max_map,
-                lambda s: f"{s.get_name(short=True)}_max",
-                True,
-            )
-        if legacy_pin is not None or no_pins:
+        endstops_min = []
+        endstop_min_map = {}
+        endstops_max = []
+        endstop_max_map = {}
+        endstops_legacy = []
+        endstop_legacy_map = {}
+        if pins.style == "minmax":
+            if pins.min_pin is not None:
+                self._attach_endstop(
+                    config,
+                    stepper,
+                    "endstop_min_pin",
+                    endstops_min,
+                    endstop_min_map,
+                    f"{stepper.get_name(short=True)}_min",
+                    False,
+                )
+            if pins.max_pin is not None:
+                self._attach_endstop(
+                    config,
+                    stepper,
+                    "endstop_max_pin",
+                    endstops_max,
+                    endstop_max_map,
+                    f"{stepper.get_name(short=True)}_max",
+                    False,
+                )
+        else:
             self._attach_endstop(
                 config,
                 stepper,
                 "endstop_pin",
-                self.endstops_legacy,
-                self.endstop_legacy_map,
-                lambda s: s.get_name(short=True),
-                True,
+                endstops_legacy,
+                endstop_legacy_map,
+                stepper.get_name(short=True),
+                False,
             )
+        return primary_stepper_endstop_setup(
+            pins,
+            endstops_min,
+            endstop_min_map,
+            endstops_max,
+            endstop_max_map,
+            endstops_legacy,
+            endstop_legacy_map,
+        )
+
+    def _add_secondary_stepper(self, config):
+        stepper = PrinterStepper(config, self.stepper_units_in_radians)
+        self.steppers.append(stepper)
+        pins = _read_endstop_pins(config)
+        self._enforce_endstop_style(config, pins.style)
+        short_name = stepper.get_name(short=True)
+
+        # Secondary stepper omitted all endstop pins -> share the rail’s existing endstop(s).
+        if pins.style is None:
+            if self._endstop_style == "minmax":
+                self._share_endstops(stepper, self.endstops_min)
+                self._share_endstops(stepper, self.endstops_max)
+            else:
+                homing_list = (
+                    self.endstops_max
+                    if self.homing_positive_dir
+                    else self.endstops_min
+                )
+                self._share_endstops(stepper, homing_list)
+            return
+
+        # Min/max style: attach configured pins or fall back to sharing existing endstops.
+        if self._endstop_style == "minmax":
+            if pins.min_pin is not None:
+                self._attach_endstop(
+                    config,
+                    stepper,
+                    "endstop_min_pin",
+                    self.endstops_min,
+                    self.endstop_min_map,
+                    f"{short_name}_min",
+                    True,
+                )
+            else:
+                self._share_endstops(stepper, self.endstops_min)
+            if pins.max_pin is not None:
+                self._attach_endstop(
+                    config,
+                    stepper,
+                    "endstop_max_pin",
+                    self.endstops_max,
+                    self.endstop_max_map,
+                    f"{short_name}_max",
+                    True,
+                )
+            else:
+                self._share_endstops(stepper, self.endstops_max)
+            return
+
+        # Legacy style: attach the provided endstop_pin to the homing-side list/map.
+        homing_list = (
+            self.endstops_max if self.homing_positive_dir else self.endstops_min
+        )
+        homing_map = (
+            self.endstop_max_map
+            if self.homing_positive_dir
+            else self.endstop_min_map
+        )
+        self._attach_endstop(
+            config,
+            stepper,
+            "endstop_pin",
+            homing_list,
+            homing_map,
+            short_name,
+            True,
+        )
 
     def setup_itersolve(self, alloc_func, *params):
         for stepper in self.steppers:
@@ -671,7 +810,7 @@ class PrinterRail:
         pin_key,
         endstop_list,
         endstop_map,
-        name_builder,
+        name,
         allow_missing=False,
     ):
         # If an endstop of this type already exists (or if this endstop type is optional),
@@ -702,7 +841,6 @@ class PrinterRail:
                 "invert": pin_params["invert"],
                 "pullup": pin_params["pullup"],
             }
-            name = name_builder(stepper)
             endstop_list.append((mcu_endstop, name))
             query_endstops.register_endstop(mcu_endstop, name)
         else:
@@ -731,5 +869,7 @@ def LookupMultiRail(
     for i in range(1, 99):
         if not config.has_section(config.get_name() + str(i)):
             break
-        rail.add_extra_stepper(config.getsection(config.get_name() + str(i)))
+        rail._add_secondary_stepper(
+            config.getsection(config.get_name() + str(i))
+        )
     return rail
