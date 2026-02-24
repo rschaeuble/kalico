@@ -454,6 +454,20 @@ class PrinterHoming:
             )
         return epos
 
+    def endstop_move(self, endstops, pos, speed):
+        hmove = HomingMove(self.printer, endstops)
+        try:
+            epos = hmove.homing_move(
+                pos, speed, probe_pos=True, check_triggered=False
+            )
+        except self.printer.command_error:
+            if self.printer.is_shutdown():
+                raise self.printer.command_error(
+                    "Endstop move failed due to printer shutdown"
+                )
+            raise
+        return epos, hmove.check_no_movement()
+
     def cmd_G28(self, gcmd):
         # Move to origin
         axes = []
