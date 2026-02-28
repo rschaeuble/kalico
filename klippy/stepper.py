@@ -426,6 +426,12 @@ def _read_endstop_pins(config) -> endstop_pin_config:
 
 
 def choose_endstop_name(short_name, *, is_homing_side, side):
+    """Return stable endstop name for QUERY_ENDSTOPS output.
+
+    Exactly one endstop per rail keeps the unsuffixed short_name ("x", "y",
+    "z") on the homing side (for backwards compatibility). The opposite side is suffixed ("x_min" / "x_max")
+    to avoid name collisions.
+    """
     if is_homing_side:
         return short_name
     return "%s_%s" % (short_name, side)
@@ -447,29 +453,35 @@ class EndstopCollection:
         self.printer = printer
         self._config = config
         self.rail_name = rail_name
+        # Registered (mcu_endstop, name) pairs (names are stable and unique).
         self.endstops = []
+        # Normalized pin name -> endstop mapping for pin sharing.
         self.endstop_map = {}
+        # Reverse lookup to make endstop naming/registration idempotent.
         self._endstop_to_mapping = {}
         self._query_endstops = None
 
     def get_endstops(self):
-        """Return a copy of this side's registered (endstop, name) pairs."""
         return list(self.endstops)
 
     def has_endstops(self):
-        """Report whether this side has at least one configured endstop pin."""
         return bool(self.endstop_map)
 
     def share_primary_with_stepper(self, stepper):
-        """Attach the first endstop on this side to an additional stepper."""
+        """Shares the primary stepper's endstop with another stepper."""
         if not self.endstops:
             return
         self.endstops[0][0].add_stepper(stepper)
 
-    def get_or_create_endstop(self, stepper, *, pin):
-        """Create or reuse an endstop for pin and attach the stepper."""
+    def get_or_create_endstop(self, *, pin):
+        """Create or reuse an endstop for pin.
+
+        This method is intentionally side-effect free with respect to steppers;
+        callers are responsible for attaching steppers via endstop.add_stepper().
+        """
         ppins = self.printer.lookup_object("pins")
         pin_params = ppins.parse_pin(pin, True, True)
+        # Normalize to a stable key so different aliases share one endstop.
         pin_name = "%s:%s" % (pin_params["chip_name"], pin_params["pin"])
         mapping = self.endstop_map.get(pin_name)
         if mapping is None:
@@ -492,11 +504,9 @@ class EndstopCollection:
                     % (self.rail_name, pin_name)
                 )
             mcu_endstop = mapping["endstop"]
-        mcu_endstop.add_stepper(stepper)
         return mcu_endstop
 
     def register_named_endstop(self, mcu_endstop, *, name):
-        """Register one stable name for an endstop on this side."""
         mapping = self._endstop_to_mapping.get(mcu_endstop)
         if mapping is None:
             raise error(
@@ -593,31 +603,46 @@ class RailEndstopConfig:
         self._primary_legacy_endstop = None
         self._legacy_collection = None
 
-        if pins.style == "legacy":
+        if pins.style == "minmax":
+            for side, pin in enumerate((pins.min_pin, pins.max_pin)):
+                if pin is None:
+                    continue
+                mcu_endstop = self._collection_for_side(
+                    side
+                ).get_or_create_endstop(pin=pin)
+                mcu_endstop.add_stepper(stepper)
+                self._primary_by_side[side] = mcu_endstop
+        else:  # legacy
             self._legacy_collection = EndstopCollection(
                 self.printer,
                 config,
                 rail_name=self._rail_name,
             )
-            self._primary_legacy_endstop = (
-                self._legacy_collection.get_or_create_endstop(
-                    stepper,
-                    pin=pins.legacy_pin,
-                )
+            mcu_endstop = self._legacy_collection.get_or_create_endstop(
+                pin=pins.legacy_pin
             )
-            return
-
-        for side, pin in enumerate((pins.min_pin, pins.max_pin)):
-            if pin is None:
-                continue
-            self._primary_by_side[side] = self._collection_for_side(
-                side
-            ).get_or_create_endstop(stepper, pin=pin)
+            mcu_endstop.add_stepper(stepper)
+            self._primary_legacy_endstop = mcu_endstop
 
     def finalize_primary_endstops(self, short_name, homing_positive_dir):
         """Assign names and complete primary registration into min/max."""
-        if self._primary_pins.style == "legacy":
-            homing_side = _side_from_direction(homing_positive_dir)
+        homing_side = _side_from_direction(homing_positive_dir)
+        if self._primary_pins.style == "minmax":
+            # Keep exactly one unsuffixed rail name (`x` / `y` / `z`) on the
+            # homing side (for backwards compatibility).
+            # The non-homing side is suffixed.
+            for side, mcu_endstop in enumerate(self._primary_by_side):
+                if mcu_endstop is None:
+                    continue
+                self._collection_for_side(side).register_named_endstop(
+                    mcu_endstop,
+                    name=choose_endstop_name(
+                        short_name,
+                        is_homing_side=side == homing_side,
+                        side=SIDE_NAME[side],
+                    ),
+                )
+        else:  # legacy
             self._collections[homing_side] = self._legacy_collection
             self._legacy_collection.register_named_endstop(
                 self._primary_legacy_endstop,
@@ -627,33 +652,17 @@ class RailEndstopConfig:
                     side=SIDE_NAME[homing_side],
                 ),
             )
-            return
-
-        # Keep exactly one unsuffixed rail name (`x` / `y` / `z`) on the
-        # homing side. The non-homing side is suffixed and each physical
-        # endstop is registered only once.
-        homing_side = _side_from_direction(homing_positive_dir)
-        for side, mcu_endstop in enumerate(self._primary_by_side):
-            if mcu_endstop is None:
-                continue
-            self._collection_for_side(side).register_named_endstop(
-                mcu_endstop,
-                name=choose_endstop_name(
-                    short_name,
-                    is_homing_side=side == homing_side,
-                    side=SIDE_NAME[side],
-                ),
-            )
 
     def get_homing_pin_string(self, homing_positive_dir):
         """Return original configured pin string for homing side."""
-        if self._primary_pins.style == "legacy":
+        if self._primary_pins.style == "minmax":
+            return (
+                self._primary_pins.max_pin
+                if homing_positive_dir
+                else self._primary_pins.min_pin
+            )
+        else:
             return self._primary_pins.legacy_pin
-        return (
-            self._primary_pins.max_pin
-            if homing_positive_dir
-            else self._primary_pins.min_pin
-        )
 
     def add_secondary_stepper(self, config, stepper, homing_positive_dir):
         """Parse and attach secondary stepper endstop pins."""
@@ -662,51 +671,34 @@ class RailEndstopConfig:
         short_name = stepper.get_name(short=True)
         homing_side = _side_from_direction(homing_positive_dir)
 
-        if self._style == "legacy":
-            if pins.style is None:
-                self._collection_for_side(
-                    homing_side
-                ).share_primary_with_stepper(stepper)
-                return
-            self._attach_stepper_to_side(
-                stepper,
-                short_name,
-                homing_side,
-                pins.legacy_pin,
-                homing_positive_dir,
-            )
-            return
-
-        if pins.style is None:
-            self._collection_for_side(SIDE_MIN).share_primary_with_stepper(
-                stepper
-            )
-            self._collection_for_side(SIDE_MAX).share_primary_with_stepper(
-                stepper
-            )
-            return
+        # Determine which rail sides this section applies to and which pins
+        # (if any) to use. Passing pin=None to _attach_stepper_to_side() means
+        # "share the primary endstop on that side".
+        if self._style == "minmax":
+            side_pins = ((SIDE_MIN, pins.min_pin), (SIDE_MAX, pins.max_pin))
+        else:  # legacy
+            side_pins = ((homing_side, pins.legacy_pin),)
 
         # Secondary steppers must not introduce a new rail side endstop.
         # Require the primary stepper section to define any side that a
         # secondary section explicitly configures so that later sharing is
         # well-defined.
-        for side, pin, pin_key in (
-            (SIDE_MIN, pins.min_pin, "endstop_min_pin"),
-            (SIDE_MAX, pins.max_pin, "endstop_max_pin"),
-        ):
-            if pin is not None and self._primary_by_side[side] is None:
-                raise config.error(
-                    "Section '%s' configures %s, but the primary section '%s' does not."
-                    % (config.get_name(), pin_key, self._rail_name, self._rail_name)
-                )
+        if self._style == "minmax":
+            for side, pin, pin_key in (
+                (SIDE_MIN, pins.min_pin, "endstop_min_pin"),
+                (SIDE_MAX, pins.max_pin, "endstop_max_pin"),
+            ):
+                if pin is not None and self._primary_by_side[side] is None:
+                    raise config.error(
+                        "Section '%s' configures %s, but the primary section '%s' does not."
+                        % (config.get_name(), pin_key, self._rail_name)
+                    )
+        # else: primary stepper must provide homing endpoint, so this is not
+        # an issue with legacy endpoint configuration.
 
-        for side, pin in enumerate((pins.min_pin, pins.max_pin)):
+        for side, pin in side_pins:
             self._attach_stepper_to_side(
-                stepper,
-                short_name,
-                side,
-                pin,
-                homing_positive_dir,
+                stepper, short_name, side, pin, homing_positive_dir
             )
 
     def _attach_stepper_to_side(
@@ -716,7 +708,10 @@ class RailEndstopConfig:
         if pin is None:
             collection.share_primary_with_stepper(stepper)
             return
-        mcu_endstop = collection.get_or_create_endstop(stepper, pin=pin)
+        mcu_endstop = collection.get_or_create_endstop(pin=pin)
+
+        mcu_endstop.add_stepper(stepper)
+
         homing_side = _side_from_direction(homing_positive_dir)
         collection.register_named_endstop(
             mcu_endstop,
@@ -778,6 +773,10 @@ class PrinterRail:
         self.stepper_units_in_radians = units_in_radians
         self.steppers = []
         self.printer = config.get_printer()
+
+        # Collect endstops per rail side (min/max) while building steppers.
+        # Naming and QUERY_ENDSTOPS registration for the primary endstop(s) is
+        # finalized after homing direction is known.
         self._endstop_config = RailEndstopConfig(self.printer, config)
         self.endstops_min, self.endstops_max = (
             self._endstop_config.get_collections()
@@ -931,6 +930,7 @@ class PrinterRail:
         return self.get_endstops_for_direction(self.homing_positive_dir)
 
     def get_endstops_for_direction(self, is_positive_dir):
+        """Return endstops that should guard motion in the given direction."""
         side = _side_from_direction(is_positive_dir)
         return (self.endstops_min, self.endstops_max)[side].get_endstops()
 
@@ -940,6 +940,12 @@ class PrinterRail:
         default_position_endstop,
         configured_homing_positive_dir,
     ):
+        """Determine numeric position_endstop.
+
+        Prefer a hint from the configured endstop object (e.g. TMC virtual
+        endstops), and fall back to the config/default value when no hint is
+        available.
+        """
         position_endstop_hint = self._endstop_config.get_position_endstop_hint(
             config,
             configured_homing_positive_dir,
@@ -952,6 +958,7 @@ class PrinterRail:
             return config.getfloat("position_endstop", default_position_endstop)
 
     def _enforce_homing_side_endstop(self, config):
+        """Require at least one endstop on the homing side."""
         homing_side = _side_from_direction(self.homing_positive_dir)
         homing_collection = (self.endstops_min, self.endstops_max)[homing_side]
         if not homing_collection.has_endstops():
