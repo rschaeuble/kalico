@@ -686,6 +686,20 @@ class RailEndstopConfig:
             )
             return
 
+        # Secondary steppers must not introduce a new rail side endstop.
+        # Require the primary stepper section to define any side that a
+        # secondary section explicitly configures so that later sharing is
+        # well-defined.
+        for side, pin, pin_key in (
+            (SIDE_MIN, pins.min_pin, "endstop_min_pin"),
+            (SIDE_MAX, pins.max_pin, "endstop_max_pin"),
+        ):
+            if pin is not None and self._primary_by_side[side] is None:
+                raise config.error(
+                    "Section '%s' configures %s, but the primary section '%s' does not."
+                    % (config.get_name(), pin_key, self._rail_name, self._rail_name)
+                )
+
         for side, pin in enumerate((pins.min_pin, pins.max_pin)):
             self._attach_stepper_to_side(
                 stepper,
