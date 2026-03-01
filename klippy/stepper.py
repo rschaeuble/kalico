@@ -982,6 +982,17 @@ class PrinterRail:
             self.homing_positive_dir,
         )
 
+    def add_foreign_stepper(self, stepper):
+        """
+        Connect a stepper of another rail to the endstops of this rail.
+        Used e.g. to setup CoreXY kinematics.
+        """
+        for dir in (True, False):
+            endstops = self.get_endstops_for_direction(dir)
+            if not endstops:
+                continue
+            endstops[0][0].add_stepper(stepper)
+
     def setup_itersolve(self, alloc_func, *params):
         for stepper in self.steppers:
             stepper.setup_itersolve(alloc_func, *params)
