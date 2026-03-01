@@ -3,6 +3,7 @@
 # Allows safe moves of an axis even when unhomed, as long as an endstop is available in the respective direction.
 # This is used by modules like safe_z_home and dockable_probe during their Z hops, and be used via a Gcode
 # command as well.
+from klippy.extras.homing import any_complete
 
 
 class SafeMove:
@@ -23,19 +24,14 @@ class SafeMove:
             raise self.printer.command_error(
                 "SAFE_MOVE: AXIS must be X, Y, or Z"
             )
-        axis_idx = "xyz".index(axis_lower)
-        kin = toolhead.get_kinematics()
-        try:
-            rail = kin.rails[axis_idx]
-        except IndexError as exc:
-            raise self.printer.command_error(
-                "SAFE_MOVE: Axis %s is not available" % axis.upper()
-            ) from exc
-
         if dist == 0.0:
             return
+
+        axis_idx = "xyz".index(axis_lower)
         positive = dist > 0.0
-        endstops = rail.get_endstops_for_direction(positive)
+
+        kin = toolhead.get_kinematics()
+        endstops = self._get_endstops(kin, axis_idx, positive, allow_unsafe)
 
         reactor = self.printer.get_reactor()
         curtime = reactor.monotonic()
@@ -68,6 +64,7 @@ class SafeMove:
                     endstops,
                     target_pos,
                     speed,
+                    complete=any_complete,
                 )
             elif allow_unsafe:
                 move_cmd = [None, None, None, None]
@@ -84,6 +81,20 @@ class SafeMove:
         finally:
             if was_unhomed:
                 kin.clear_homing_state([axis_idx])
+
+    def _get_endstops(self, kin, axis_idx, positive, allow_unsafe):
+        endstops = kin.get_endstops_for_safe_move(axis_idx, positive)
+        if endstops is None:
+            if allow_unsafe:
+                return []
+            raise self.printer.command_error(
+                f"SAFE_MOVE: kinematics do not support axis {'XYZ'[axis_idx]} in the {'positive' if positive else 'negative'} direction"
+            )
+        if len(endstops) == 0 and not allow_unsafe:
+            raise self.printer.command_error(
+                f"SAFE_MOVE: No endstops configured for axis {'XYZ'[axis_idx]} in the {'positive' if positive else 'negative'} direction"
+            )
+        return endstops
 
     cmd_SAFE_MOVE_help = "Perform a safe axis move"
 

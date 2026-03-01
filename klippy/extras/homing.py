@@ -28,6 +28,32 @@ def multi_complete(printer, completions):
     return cp
 
 
+# Return a completion that completes when the first completion in a list complete
+def any_complete(printer, completions):
+    if len(completions) == 1:
+        return completions[0]
+    # Build completion that completes on the first completion.
+    reactor = printer.get_reactor()
+    cp = reactor.completion()
+
+    def _wait_one(eventtime, c):
+        res = c.wait()
+        if cp.test():
+            # Another callback already completed cp (and unblocked the other waits) while we were blocked in c.wait().
+            return 0
+        # Complete the main completion and abort any remaining waits so that
+        # callers are not blocked waiting on completions that will never fire.
+        cp.complete(res)
+        for oc in completions:
+            if oc is not c and not oc.test():
+                oc.complete(res)
+        return 0
+
+    for c in completions:
+        reactor.register_callback(lambda e, c=c: _wait_one(e, c))
+    return cp
+
+
 # Tracking of stepper positions during a homing/probing move
 class StepperPosition:
     def __init__(self, stepper, endstop_name):
@@ -104,6 +130,7 @@ class HomingMove:
         probe_pos=False,
         triggered=True,
         check_triggered=True,
+        complete=multi_complete,
     ):
         # Notify start of homing/probing move
         self.printer.send_event("homing:homing_move_begin", self)
@@ -131,7 +158,7 @@ class HomingMove:
                 triggered=triggered,
             )
             endstop_triggers.append(wait)
-        all_endstop_trigger = multi_complete(self.printer, endstop_triggers)
+        all_endstop_trigger = complete(self.printer, endstop_triggers)
 
         self.toolhead.dwell(HOMING_START_DELAY)
         # Issue move
@@ -176,15 +203,19 @@ class HomingMove:
                 sp.verify_no_probe_skew(haltpos)
         else:
             haltpos = trigpos = movepos
-            over_steps = {
-                sp.stepper_name: sp.halt_pos - sp.trig_pos
-                for sp in self.stepper_positions
-            }
-            steps_moved = {
-                sp.stepper_name: (sp.halt_pos - sp.start_pos)
-                * sp.stepper.get_step_dist()
-                for sp in self.stepper_positions
-            }
+            over_steps = {}
+            steps_moved = {}
+            for sp in self.stepper_positions:
+                halt_pos = sp.halt_pos
+                trig_pos = sp.trig_pos
+                if halt_pos is None or trig_pos is None:
+                    raise self.printer.command_error(
+                        "Internal error: missing endstop position data"
+                    )
+                over_steps[sp.stepper_name] = halt_pos - trig_pos
+                steps_moved[sp.stepper_name] = (
+                    halt_pos - sp.start_pos
+                ) * sp.stepper.get_step_dist()
             filled_steps_moved = {
                 sname: steps_moved.get(sname, 0)
                 for sname in [s.get_name() for s in kin.get_steppers()]
@@ -454,11 +485,15 @@ class PrinterHoming:
             )
         return epos
 
-    def endstop_move(self, endstops, pos, speed):
+    def endstop_move(self, endstops, pos, speed, *, complete=multi_complete):
         hmove = HomingMove(self.printer, endstops)
         try:
             epos = hmove.homing_move(
-                pos, speed, probe_pos=True, check_triggered=False
+                pos,
+                speed,
+                probe_pos=True,
+                check_triggered=False,
+                complete=complete,
             )
         except self.printer.command_error:
             if self.printer.is_shutdown():
