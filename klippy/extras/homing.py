@@ -5,7 +5,7 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
 import math
-from enum import StrEnum, auto
+from enum import Enum
 
 from .danger_options import get_danger_options
 
