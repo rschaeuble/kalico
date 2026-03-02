@@ -111,7 +111,9 @@ class SafeMove:
 
         toolhead = self.printer.lookup_object("toolhead")
         try:
-            self.move(toolhead, axis, dist, speed, allow_unsafe=bool(allow_unsafe))
+            self.move(
+                toolhead, axis, dist, speed, allow_unsafe=bool(allow_unsafe)
+            )
         except self.printer.command_error as err:
             raise gcmd.error(str(err))
 
