@@ -107,10 +107,11 @@ class SafeMove:
         if dist == 0.0:
             return
         speed = gcmd.get_float("SPEED", above=0.0)
+        allow_unsafe = gcmd.get_int("ALLOW_UNSAFE", 0)
 
         toolhead = self.printer.lookup_object("toolhead")
         try:
-            self.move(toolhead, axis, dist, speed)
+            self.move(toolhead, axis, dist, speed, allow_unsafe=bool(allow_unsafe))
         except self.printer.command_error as err:
             raise gcmd.error(str(err))
 
