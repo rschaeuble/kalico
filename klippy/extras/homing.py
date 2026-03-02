@@ -14,15 +14,15 @@ ENDSTOP_SAMPLE_TIME = 0.000015
 ENDSTOP_SAMPLE_COUNT = 4
 
 
-class MoveResult(StrEnum):
-    FULL_MOVE = auto()
-    """the move has covered the full requested distance"""
+class MoveResult(str, Enum):
+    # The move has covered the full requested distance without triggering an endstop.
+    FULL_MOVE = "full_move"
 
-    HIT_ENDSTOP = auto()
-    """the endstop was hit before covering the full distance"""
+    # The endstop was hit before covering the full distance.
+    HIT_ENDSTOP = "hit_endstop"
 
-    ALREADY_AT_ENDSTOP = auto()
-    """there was not move because the the endstop was already triggered"""
+    # There was no move because the endstop was already triggered.
+    ALREADY_AT_ENDSTOP = "already_at_endstop"
 
 
 # Return a completion that completes when all completions in a list complete
