@@ -5,12 +5,24 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
 import math
+from enum import StrEnum, auto
 
 from .danger_options import get_danger_options
 
 HOMING_START_DELAY = 0.001
 ENDSTOP_SAMPLE_TIME = 0.000015
 ENDSTOP_SAMPLE_COUNT = 4
+
+
+class MoveResult(StrEnum):
+    FULL_MOVE = auto()
+    """the move has covered the full requested distance"""
+
+    HIT_ENDSTOP = auto()
+    """the endstop was hit before covering the full distance"""
+
+    ALREADY_AT_ENDSTOP = auto()
+    """there was not move because the the endstop was already triggered"""
 
 
 # Return a completion that completes when all completions in a list complete
@@ -501,7 +513,13 @@ class PrinterHoming:
                     "Endstop move failed due to printer shutdown"
                 )
             raise
-        return epos, hmove.check_no_movement()
+
+        if hmove.check_no_movement():
+            return epos, MoveResult.ALREADY_AT_ENDSTOP
+        elif all(math.isclose(p, e) for p, e in zip(pos, epos)):
+            return epos, MoveResult.FULL_MOVE
+        else:
+            return epos, MoveResult.HIT_ENDSTOP
 
     def cmd_G28(self, gcmd):
         # Move to origin
