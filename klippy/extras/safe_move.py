@@ -3,7 +3,7 @@
 # Allows safe moves of an axis even when unhomed, as long as an endstop is available in the respective direction.
 # This is used by modules like safe_z_home and dockable_probe during their Z hops, and be used via a Gcode
 # command as well.
-from klippy.extras.homing import any_complete
+from klippy.extras.homing import MoveResult, any_complete
 
 
 class SafeMove:
@@ -16,6 +16,9 @@ class SafeMove:
         gcode.register_command(
             "SAFE_MOVE", self.cmd_SAFE_MOVE, desc=self.cmd_SAFE_MOVE_help
         )
+        self.last_axis = None
+        self.last_dist = None
+        self.last_result = None
 
     def move(self, toolhead, axis, dist, speed, allow_unsafe=False):
         """Move on one axis, stopping early if protected endstops trigger."""
@@ -60,16 +63,21 @@ class SafeMove:
 
         try:
             if endstops:
-                self.homing.endstop_move(
+                epos, res = self.homing.endstop_move(
                     endstops,
                     target_pos,
                     speed,
                     complete=any_complete,
                 )
+                self.last_dist = epos[axis_idx] - position[axis_idx]
+                self.last_result = res
             elif allow_unsafe:
                 move_cmd = [None, None, None, None]
                 move_cmd[axis_idx] = target_pos[axis_idx]
                 toolhead.manual_move(move_cmd, speed)
+
+                self.last_dist = dist
+                self.last_result = MoveResult.FULL_MOVE
             else:
                 raise self.printer.command_error(
                     "SAFE_MOVE: No endstop protects axis %s in the %s direction"
@@ -78,6 +86,8 @@ class SafeMove:
                         "positive" if positive else "negative",
                     )
                 )
+
+            self.last_axis = axis_lower
         finally:
             if was_unhomed:
                 kin.clear_homing_state([axis_idx])
@@ -116,6 +126,13 @@ class SafeMove:
             )
         except self.printer.command_error as err:
             raise gcmd.error(str(err))
+
+    def get_status(self, eventtime):
+        return {
+            "last_axis": self.last_axis,
+            "last_dist": self.last_dist,
+            "last_result": self.last_result,
+        }
 
 
 def load_config(config):
