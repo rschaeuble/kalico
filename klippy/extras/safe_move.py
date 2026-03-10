@@ -71,6 +71,11 @@ class SafeMove:
                 )
                 self.last_dist = epos[axis_idx] - position[axis_idx]
                 self.last_result = res
+
+                if res == MoveResult.ALREADY_AT_ENDSTOP:
+                    raise self.printer.command_error(
+                        "Toolhead is already at endstop - unsafe to continue."
+                    )
             elif allow_unsafe:
                 move_cmd = [None, None, None, None]
                 move_cmd[axis_idx] = target_pos[axis_idx]
